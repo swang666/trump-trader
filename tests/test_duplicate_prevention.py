@@ -13,7 +13,7 @@ from datetime import datetime
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from main import TruthTradingMonitor
+from main import MultiSourceTradingMonitor
 
 
 def test_duplicate_prevention():
@@ -36,7 +36,7 @@ def test_duplicate_prevention():
         print("-" * 80)
         
         # Initialize monitor
-        monitor = TruthTradingMonitor(check_interval=60)
+        monitor = MultiSourceTradingMonitor(check_interval=60)
         
         # Create a test post
         test_post = {
@@ -48,18 +48,18 @@ def test_duplicate_prevention():
         }
         
         # Verify post is not in processed set
-        assert test_post['id'] not in monitor.processed_posts, \
-            "Post should not be in processed_posts initially"
-        print(f"[OK] Post {test_post['id']} is not in processed_posts")
+        assert test_post['id'] not in monitor.processed_items, \
+            "Post should not be in processed_items initially"
+        print(f"[OK] Post {test_post['id']} is not in processed_items")
         
         # Process the post for the first time
         print(f"\n[INFO] Processing post for the first time...")
-        monitor.process_post(test_post)
+        monitor.process_item(test_post)
         
         # Verify post is now in processed set
-        assert test_post['id'] in monitor.processed_posts, \
-            "Post should be in processed_posts after processing"
-        print(f"[OK] Post {test_post['id']} added to processed_posts")
+        assert test_post['id'] in monitor.processed_items, \
+            "Post should be in processed_items after processing"
+        print(f"[OK] Post {test_post['id']} added to processed_items")
         
         # Save state
         monitor.save_state()
@@ -68,7 +68,7 @@ def test_duplicate_prevention():
         # Verify state file exists and contains the post
         with open('data/monitor_state.json', 'r') as f:
             state = json.load(f)
-            assert test_post['id'] in state['processed_posts'], \
+            assert test_post['id'] in state['processed_items'], \
                 "Post should be in saved state"
             print(f"[OK] Post {test_post['id']} found in saved state file")
         
@@ -95,7 +95,7 @@ def test_duplicate_prevention():
         
         # Try to process the same post again
         print(f"\n[INFO] Attempting to process duplicate post...")
-        monitor.process_post(test_post)
+        monitor.process_item(test_post)
         
         # Count files after
         analysis_count_after = 0
@@ -127,18 +127,18 @@ def test_duplicate_prevention():
         
         # Create a new monitor instance (simulating restart)
         print("[INFO] Creating new monitor instance (simulating restart)...")
-        monitor2 = TruthTradingMonitor(check_interval=60)
+        monitor2 = MultiSourceTradingMonitor(check_interval=60)
         
         # Verify the post is still in processed set
-        assert test_post['id'] in monitor2.processed_posts, \
-            "Post should still be in processed_posts after restart"
+        assert test_post['id'] in monitor2.processed_items, \
+            "Post should still be in processed_items after restart"
         print(f"[OK] Post {test_post['id']} persisted across restart")
         
         # Try to process with new instance
         print(f"\n[INFO] Attempting to process with new monitor instance...")
         analysis_count_before_restart = analysis_count_after
         
-        monitor2.process_post(test_post)
+        monitor2.process_item(test_post)
         
         # Verify still no new analysis
         if os.path.exists(analysis_file):
@@ -164,28 +164,28 @@ def test_duplicate_prevention():
         print(f"[INFO] Processing a different post: {test_post2['id']}")
         
         # This should be processed normally
-        assert test_post2['id'] not in monitor2.processed_posts, \
-            "New post should not be in processed_posts"
-        print(f"[OK] New post {test_post2['id']} is not in processed_posts")
+        assert test_post2['id'] not in monitor2.processed_items, \
+            "New post should not be in processed_items"
+        print(f"[OK] New post {test_post2['id']} is not in processed_items")
         
-        monitor2.process_post(test_post2)
+        monitor2.process_item(test_post2)
         
         # Verify it was added
-        assert test_post2['id'] in monitor2.processed_posts, \
-            "New post should be added to processed_posts"
+        assert test_post2['id'] in monitor2.processed_items, \
+            "New post should be added to processed_items"
         print(f"[OK] New post {test_post2['id']} was processed successfully")
         
         # Verify state now has both posts
         monitor2.save_state()
         with open('data/monitor_state.json', 'r') as f:
             state = json.load(f)
-            assert len(state['processed_posts']) == 2, \
+            assert len(state['processed_items']) == 2, \
                 "State should contain both posts"
-            assert test_post['id'] in state['processed_posts'], \
+            assert test_post['id'] in state['processed_items'], \
                 "First post should be in state"
-            assert test_post2['id'] in state['processed_posts'], \
+            assert test_post2['id'] in state['processed_items'], \
                 "Second post should be in state"
-            print(f"[OK] State contains {len(state['processed_posts'])} posts")
+            print(f"[OK] State contains {len(state['processed_items'])} posts")
         
         print("\n" + "="*80)
         print("[SUCCESS] ALL DUPLICATE PREVENTION TESTS PASSED!")

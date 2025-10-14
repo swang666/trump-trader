@@ -91,7 +91,14 @@ class TradingIdeasGenerator:
             return None
         
         sentiment = company.get('sentiment', 'neutral')
-        overall_sentiment = analysis.get('sentiment', {}).get('label', 'neutral')
+        
+        # Handle both dict and string sentiment formats
+        sentiment_data = analysis.get('sentiment', {})
+        if isinstance(sentiment_data, dict):
+            overall_sentiment = sentiment_data.get('label', 'neutral')
+        else:
+            overall_sentiment = str(sentiment_data).lower() if sentiment_data else 'neutral'
+        
         urgency = analysis.get('urgency', 'low')
         
         # Determine direction
@@ -176,7 +183,13 @@ class TradingIdeasGenerator:
         """Generate thematic trading ideas based on topics"""
         ideas = []
         topics = analysis['topics']
-        sentiment = analysis['sentiment']['label']
+        
+        # Handle both dict and string sentiment formats
+        sentiment_data = analysis.get('sentiment', {})
+        if isinstance(sentiment_data, dict):
+            sentiment = sentiment_data.get('label', 'neutral')
+        else:
+            sentiment = str(sentiment_data).lower() if sentiment_data else 'neutral'
         
         if 'trade' in topics:
             # Trade policy implications

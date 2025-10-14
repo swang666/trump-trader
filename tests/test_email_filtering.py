@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from main import TruthTradingMonitor
+from main import MultiSourceTradingMonitor
 
 
 def test_email_filtering():
@@ -29,7 +29,7 @@ def test_email_filtering():
     
     try:
         # Initialize monitor with mocked email
-        monitor = TruthTradingMonitor(check_interval=60)
+        monitor = MultiSourceTradingMonitor(check_interval=60)
         
         # Mock the email notifier to track calls
         email_sent_count = [0]  # Use list to make it mutable in nested function
@@ -54,7 +54,7 @@ def test_email_filtering():
             'title': ''
         }
         
-        monitor.process_post(empty_post)
+        monitor.process_item(empty_post)
         assert email_sent_count[0] == 0, "Empty post should not trigger email"
         print("[OK] Empty post did not trigger email")
         
@@ -69,7 +69,7 @@ def test_email_filtering():
             'title': ''
         }
         
-        monitor.process_post(short_post)
+        monitor.process_item(short_post)
         assert email_sent_count[0] == 0, "Single character post should not trigger email"
         print("[OK] Single character post did not trigger email")
         
@@ -84,7 +84,7 @@ def test_email_filtering():
             'title': ''
         }
         
-        monitor.process_post(generic_post)
+        monitor.process_item(generic_post)
         # This might or might not send depending on AI analysis
         initial_count = email_sent_count[0]
         print(f"[INFO] Generic post resulted in {email_sent_count[0]} emails")
@@ -101,7 +101,7 @@ def test_email_filtering():
         }
         
         before_relevant = email_sent_count[0]
-        monitor.process_post(relevant_post)
+        monitor.process_item(relevant_post)
         after_relevant = email_sent_count[0]
         
         assert after_relevant > before_relevant, "Relevant post should trigger email"

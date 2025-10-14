@@ -1,10 +1,15 @@
-# Trump Truth Social Trading Monitor
+# Multi-Source Trading Monitor
 
-An automated system that monitors Trump's Truth Social posts from trumpstruth.org and generates stock trading ideas based on real-time AI analysis.
+An automated system that monitors multiple market-moving sources and generates stock trading ideas based on real-time AI analysis.
+
+## 📊 Monitored Sources
+
+- **Trump Truth Social** - Political and economic policy posts
+- **ARK Invest Trades** - Cathie Wood's daily trading activity (ARKK, ARKG, ARKW, ARKF, ARKQ, ARKX)
 
 ## Features
 
-- 🔄 **Real-time monitoring** of Truth Social posts
+- 🔄 **Multi-source monitoring** - Trump Truth Social + ARK Invest trades
 - 🤖 **Google Gemini AI** powered analysis (FREE)
 - 📊 **Sentiment analysis** and NLP processing
 - 🏢 **Entity extraction** (companies, sectors, topics)
@@ -12,6 +17,7 @@ An automated system that monitors Trump's Truth Social posts from trumpstruth.or
 - 💾 **Historical data** storage and tracking
 - 🎯 **Risk assessment** for each trading idea
 - ✉️ **Email notifications** with beautiful HTML reports
+- 🔒 **Duplicate prevention** across all sources
 
 ## Installation
 
@@ -68,16 +74,19 @@ run.bat     # Windows
 ## Usage
 
 The system will:
-1. Monitor trumpstruth.org for new posts every 60 seconds
-2. **Skip empty or very short posts** (< 2 characters)
-3. Analyze each post using NLP and Google Gemini AI
-4. Extract companies, sectors, and sentiment
-5. Generate actionable trading ideas with confidence levels
-6. **Send email notifications ONLY for significant posts:**
+1. **Monitor multiple sources** every 60 seconds:
+   - Trump Truth Social posts
+   - ARK Invest trades
+2. **Skip empty or very short content** (< 2 characters)
+3. **Analyze each item** using appropriate analyzer:
+   - Posts: NLP + Google Gemini AI (sentiment, companies, sectors)
+   - Trades: Institutional activity analysis (direction, size, significance)
+4. **Generate trading ideas** with confidence levels and risk assessment
+5. **Send email notifications ONLY for significant items:**
    - Market relevance ≥ 0.3
    - Companies mentioned OR trading ideas generated OR high urgency
    - Substantial content (≥ 2 characters)
-7. Save all results to `data/trading_ideas.json`
+6. Save all results to `data/trading_ideas.json`
 
 ## Project Structure
 

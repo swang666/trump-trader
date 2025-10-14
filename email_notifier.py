@@ -82,7 +82,13 @@ class EmailNotifier:
     
     def _create_subject(self, analysis: Dict) -> str:
         """Create email subject line"""
-        sentiment = analysis.get('sentiment', {}).get('label', 'neutral').upper()
+        # Handle both dict and string sentiment formats
+        sentiment_data = analysis.get('sentiment', {})
+        if isinstance(sentiment_data, dict):
+            sentiment = sentiment_data.get('label', 'neutral').upper()
+        else:
+            sentiment = str(sentiment_data).upper() if sentiment_data else 'NEUTRAL'
+        
         relevance = analysis.get('market_relevance', 0.0)
         urgency = analysis.get('urgency', 'low').upper()
         
@@ -173,8 +179,14 @@ class EmailNotifier:
     
     def _create_html_report(self, post: Dict, analysis: Dict, trading_ideas: List[Dict]) -> str:
         """Create HTML version of report"""
-        sentiment = analysis.get('sentiment', {})
-        sentiment_label = sentiment.get('label', 'neutral')
+        # Handle both dict and string sentiment formats
+        sentiment_data = analysis.get('sentiment', {})
+        if isinstance(sentiment_data, dict):
+            sentiment_label = sentiment_data.get('label', 'neutral')
+            sentiment_score = sentiment_data.get('polarity', 0)
+        else:
+            sentiment_label = str(sentiment_data) if sentiment_data else 'neutral'
+            sentiment_score = analysis.get('sentiment_score', 0)
         
         # Sentiment colors
         sentiment_colors = {

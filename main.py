@@ -1,16 +1,21 @@
 """
-Trump Truth Social Trading Monitor
-Main application entry point
+Multi-Source Trading Monitor
+Monitors Trump Truth Social + ARK Invest Trades + More
 """
 
 import time
 import json
 import os
 from datetime import datetime
-from typing import Dict
+from typing import Dict, List
 from dotenv import load_dotenv
 
-from scraper import TruthSocialScraper
+# Import scrapers
+from sources.truth_social_scraper import TruthSocialScraper
+from sources.ark_scraper import ARKTradesScraper
+from sources.ark_analyzer import ARKTradeAnalyzer
+
+# Import analyzers and generators
 from analyzer import PostAnalyzer
 from trading_ideas import TradingIdeasGenerator
 from email_notifier import EmailNotifier
@@ -18,17 +23,25 @@ from email_notifier import EmailNotifier
 load_dotenv()
 
 
-class TruthTradingMonitor:
-    """Main application class"""
+class MultiSourceTradingMonitor:
+    """Main application class - monitors multiple market-moving sources"""
     
     def __init__(self, check_interval: int = 60):
-        self.scraper = TruthSocialScraper()
-        self.analyzer = PostAnalyzer(use_ai=True)
+        # Initialize scrapers
+        self.truth_scraper = TruthSocialScraper()
+        self.ark_scraper = ARKTradesScraper()
+        
+        # Initialize analyzers
+        self.post_analyzer = PostAnalyzer(use_ai=True)
+        self.ark_analyzer = ARKTradeAnalyzer()
+        
+        # Initialize generators and notifiers
         self.generator = TradingIdeasGenerator()
         self.email_notifier = EmailNotifier()
+        
         self.check_interval = check_interval
         self.running = False
-        self.processed_posts = set()  # Track processed post IDs
+        self.processed_items = set()  # Track processed item IDs (posts + trades)
         
         # Ensure data directory exists
         os.makedirs('data', exist_ok=True)
@@ -42,10 +55,10 @@ class TruthTradingMonitor:
         try:
             with open(self.state_file, 'r') as f:
                 state = json.load(f)
-                self.scraper.last_post_id = state.get('last_post_id')
-                self.processed_posts = set(state.get('processed_posts', []))
-                print(f"[OK] Loaded state: {len(self.processed_posts)} posts processed")
-                print(f"     Last post ID: {self.scraper.last_post_id}")
+                self.truth_scraper.last_post_id = state.get('last_truth_post_id')
+                self.processed_items = set(state.get('processed_items', []))
+                print(f"[OK] Loaded state: {len(self.processed_items)} items processed")
+                print(f"     Last Truth Social post: {self.truth_scraper.last_post_id}")
         except FileNotFoundError:
             print("[INFO] No previous state found, starting fresh")
     
@@ -53,50 +66,61 @@ class TruthTradingMonitor:
         """Save monitor state"""
         try:
             state = {
-                'last_post_id': self.scraper.last_post_id,
-                'processed_posts': list(self.processed_posts),
+                'last_truth_post_id': self.truth_scraper.last_post_id,
+                'processed_items': list(self.processed_items),
                 'last_check': datetime.now().isoformat(),
-                'total_processed': len(self.processed_posts)
+                'total_processed': len(self.processed_items)
             }
             with open(self.state_file, 'w') as f:
                 json.dump(state, f, indent=2)
         except Exception as e:
             print(f"[ERROR] Failed to save state: {e}")
     
-    def process_post(self, post: Dict):
-        """Process a single post"""
-        post_id = post.get('id')
+    def process_item(self, item: Dict):
+        """Process a single item (post or trade)"""
+        item_id = item.get('id')
+        item_source = item.get('source', 'UNKNOWN')
+        item_type = item.get('type', 'post')
         
         # Skip if already processed
-        if post_id in self.processed_posts:
-            print(f"[SKIP] Post {post_id} already processed")
+        if item_id in self.processed_items:
+            print(f"[SKIP] {item_source} item {item_id} already processed")
             return
         
         print(f"\n{'='*80}")
-        print(f"NEW POST DETECTED at {post['timestamp']}")
+        print(f"NEW {item_type.upper()} DETECTED from {item_source} at {item['timestamp']}")
         print(f"{'='*80}")
         
-        # Get post content
-        content = post.get('content', '').strip()
+        # Get content
+        content = item.get('content', '').strip()
         
-        # Check if post is empty or too short
+        # Check if content is empty or too short
         if not content or len(content) < 2:
-            print(f"[SKIP] Post content is empty or too short (length: {len(content)})")
-            print("[INFO] Not processing empty post")
+            print(f"[SKIP] Content is empty or too short (length: {len(content)})")
+            print("[INFO] Not processing empty item")
             # Still mark as processed to avoid checking again
-            self.processed_posts.add(post_id)
+            self.processed_items.add(item_id)
             self.save_state()
             return
         
         print(f"Content: {content[:200]}...")
-        print(f"Link: {post['link']}")
+        print(f"Link: {item.get('link', 'N/A')}")
         
-        # Analyze post
-        print("\n[INFO] Analyzing post...")
-        analysis = self.analyzer.analyze_post(post)
+        # Choose appropriate analyzer based on source
+        print("\n[INFO] Analyzing item...")
+        if item_source == 'ARK_INVEST':
+            analysis = self.ark_analyzer.analyze_trade(item)
+        else:
+            analysis = self.post_analyzer.analyze_post(item)
         
-        print(f"Sentiment: {analysis['sentiment']['label'].upper()} "
-              f"(polarity: {analysis['sentiment']['polarity']:.2f})")
+        # Display sentiment
+        if 'sentiment' in analysis:
+            if isinstance(analysis['sentiment'], dict):
+                print(f"Sentiment: {analysis['sentiment']['label'].upper()} "
+                      f"(polarity: {analysis['sentiment']['polarity']:.2f})")
+            else:
+                print(f"Sentiment: {analysis.get('sentiment', 'NEUTRAL').upper()}")
+        
         print(f"Market Relevance: {analysis['market_relevance']:.2f}")
         
         if analysis['companies']:
@@ -143,16 +167,17 @@ class TruthTradingMonitor:
         # Send email notification only if significant
         if self.email_notifier.enabled and should_send_email:
             print("\n[INFO] Sending email notification...")
-            self.email_notifier.send_analysis_report(post, analysis, ideas)
+            self.email_notifier.send_analysis_report(item, analysis, ideas)
         elif self.email_notifier.enabled and not should_send_email:
-            print("\n[SKIP] Post not significant enough for email notification")
+            print("\n[SKIP] Item not significant enough for email notification")
             print(f"       Market relevance: {analysis['market_relevance']:.2f}")
             print(f"       Companies found: {len(analysis['companies'])}")
             print(f"       Trading ideas: {len(ideas)}")
         
         # Mark as processed
-        self.processed_posts.add(post_id)
-        print(f"[OK] Post {post_id} processed and marked")
+        self.processed_items.add(item_id)
+        print(f"[OK] {item_source} item {item_id} processed and marked")
+        self.save_state()
     
     def _should_send_email_notification(self, analysis: Dict, trading_ideas: list) -> bool:
         """
@@ -209,22 +234,45 @@ class TruthTradingMonitor:
         except Exception as e:
             print(f"Error saving analysis: {e}")
     
+    def check_all_sources(self):
+        """Check all sources for new items"""
+        all_items = []
+        
+        # Check Truth Social
+        try:
+            truth_posts = self.scraper.get_new_posts()
+            all_items.extend(truth_posts)
+            if truth_posts:
+                print(f"[OK] Found {len(truth_posts)} new Truth Social post(s)")
+        except Exception as e:
+            print(f"[ERROR] Truth Social check failed: {e}")
+        
+        # Check ARK Trades
+        try:
+            ark_trades = self.ark_scraper.fetch_latest_trades(limit=20)
+            # Filter out already processed trades
+            new_ark_trades = [t for t in ark_trades if t['id'] not in self.processed_items]
+            all_items.extend(new_ark_trades)
+            if new_ark_trades:
+                print(f"[OK] Found {len(new_ark_trades)} new ARK trade(s)")
+        except Exception as e:
+            print(f"[ERROR] ARK trades check failed: {e}")
+        
+        return all_items
+    
     def run_once(self):
         """Run one check cycle"""
-        print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Checking for new posts...")
+        print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Checking all sources...")
         
         try:
-            new_posts = self.scraper.get_new_posts()
+            new_items = self.check_all_sources()
             
-            if new_posts:
-                print(f"Found {len(new_posts)} new post(s)!")
-                for post in new_posts:
-                    self.process_post(post)
-                
-                # Save state after processing
-                self.save_state()
+            if new_items:
+                print(f"Found {len(new_items)} new item(s) total!")
+                for item in new_items:
+                    self.process_item(item)
             else:
-                print("No new posts found.")
+                print("No new items found from any source.")
         
         except Exception as e:
             print(f"Error during check: {e}")
@@ -234,15 +282,17 @@ class TruthTradingMonitor:
     def run(self):
         """Run the monitor continuously"""
         print("="*80)
-        print("TRUMP TRUTH SOCIAL TRADING MONITOR")
+        print("MULTI-SOURCE TRADING MONITOR")
         print("="*80)
+        print("Sources: Trump Truth Social + ARK Invest Trades")
         print(f"Monitoring interval: {self.check_interval} seconds")
+        print(f"Email notifications: {'ENABLED' if self.email_notifier.enabled else 'DISABLED'}")
         print("Press Ctrl+C to stop\n")
         
         # Test connection
         print("Testing connection to trumpstruth.org...")
         if self.scraper.test_connection():
-            print("✓ Connection successful\n")
+            print("[OK] Truth Social connection successful\n")
         else:
             print("[WARNING] Could not connect to trumpstruth.org")
             print("Will continue trying...\n")
@@ -259,7 +309,7 @@ class TruthTradingMonitor:
                 self.run_once()
         
         except KeyboardInterrupt:
-            print("\n\n🛑 Stopping monitor...")
+            print("\n\n[INFO] Stopping monitor...")
             self.save_state()
             print("State saved. Goodbye!")
     
