@@ -240,7 +240,7 @@ class MultiSourceTradingMonitor:
         
         # Check Truth Social
         try:
-            truth_posts = self.scraper.get_new_posts()
+            truth_posts = self.truth_scraper.get_new_posts()
             all_items.extend(truth_posts)
             if truth_posts:
                 print(f"[OK] Found {len(truth_posts)} new Truth Social post(s)")
@@ -291,7 +291,7 @@ class MultiSourceTradingMonitor:
         
         # Test connection
         print("Testing connection to trumpstruth.org...")
-        if self.scraper.test_connection():
+        if self.truth_scraper.test_connection():
             print("[OK] Truth Social connection successful\n")
         else:
             print("[WARNING] Could not connect to trumpstruth.org")
