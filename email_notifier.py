@@ -92,24 +92,46 @@ class EmailNotifier:
         relevance = analysis.get('market_relevance', 0.0)
         urgency = analysis.get('urgency', 'low').upper()
         
-        num_companies = len(analysis.get('companies', []))
+        # Check source type
+        source = analysis.get('source', 'TRUTH_SOCIAL')
         
-        if num_companies > 0:
-            return f"[{urgency}] Truth Social Alert: {sentiment} - {num_companies} Companies Mentioned"
+        if source == 'ARK_INVEST':
+            # ARK trade alert
+            ticker = analysis.get('companies', [{}])[0].get('ticker', 'N/A') if analysis.get('companies') else 'N/A'
+            trade_direction = analysis.get('trade_direction', '').upper()
+            fund = analysis.get('trade_fund', 'ARK')
+            return f"[{urgency}] Cathie Wood Alert: {fund} {trade_direction} {ticker} - {sentiment}"
         else:
-            return f"[{urgency}] Truth Social Alert: {sentiment} Sentiment"
+            # Truth Social alert
+            num_companies = len(analysis.get('companies', []))
+            if num_companies > 0:
+                return f"[{urgency}] Truth Social Alert: {sentiment} - {num_companies} Companies Mentioned"
+            else:
+                return f"[{urgency}] Truth Social Alert: {sentiment} Sentiment"
     
     def _create_text_report(self, post: Dict, analysis: Dict, trading_ideas: List[Dict]) -> str:
         """Create plain text version of report"""
         lines = []
         lines.append("=" * 80)
-        lines.append("TRUMP TRUTH SOCIAL TRADING ALERT")
-        lines.append("=" * 80)
-        lines.append(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        lines.append(f"Post Link: {post.get('link', 'N/A')}")
+        
+        # Check if this is an ARK trade or Truth Social post
+        source = post.get('source', 'TRUTH_SOCIAL')
+        if source == 'ARK_INVEST':
+            lines.append("ARK INVEST TRADE ALERT")
+            lines.append("=" * 80)
+            lines.append(f"Report Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            lines.append(f"Trade Date: {post.get('date', 'N/A')}")
+            lines.append(f"Fund: {post.get('fund', 'N/A')}")
+            lines.append(f"Trader: {post.get('trader', 'Cathie Wood (ARK Invest)')}")
+            lines.append(f"Link: {post.get('link', 'N/A')}")
+        else:
+            lines.append("TRUMP TRUTH SOCIAL TRADING ALERT")
+            lines.append("=" * 80)
+            lines.append(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            lines.append(f"Post Link: {post.get('link', 'N/A')}")
         lines.append("")
         
-        lines.append("POST CONTENT:")
+        lines.append("CONTENT:")
         lines.append("-" * 80)
         content = post.get('content', '')[:500]
         lines.append(content)
@@ -119,8 +141,18 @@ class EmailNotifier:
         
         lines.append("ANALYSIS:")
         lines.append("-" * 80)
-        sentiment = analysis.get('sentiment', {})
-        lines.append(f"Sentiment: {sentiment.get('label', 'N/A').upper()} (polarity: {sentiment.get('polarity', 0):.2f})")
+        
+        # Handle both dict and string sentiment formats
+        sentiment_data = analysis.get('sentiment', {})
+        if isinstance(sentiment_data, dict):
+            sentiment_label = sentiment_data.get('label', 'N/A').upper()
+            sentiment_polarity = sentiment_data.get('polarity', 0)
+            lines.append(f"Sentiment: {sentiment_label} (polarity: {sentiment_polarity:.2f})")
+        else:
+            sentiment_label = str(sentiment_data).upper() if sentiment_data else 'N/A'
+            sentiment_score = analysis.get('sentiment_score', 0)
+            lines.append(f"Sentiment: {sentiment_label} (score: {sentiment_score:.2f})")
+        
         lines.append(f"Market Relevance: {analysis.get('market_relevance', 0):.2f}")
         lines.append(f"Urgency: {analysis.get('urgency', 'N/A').upper()}")
         lines.append("")
@@ -238,10 +270,25 @@ class EmailNotifier:
             </style>
         </head>
         <body>
-            <div class="header">
+            <div class="header">"""
+        
+        # Different header based on source
+        source = post.get('source', 'TRUTH_SOCIAL')
+        if source == 'ARK_INVEST':
+            trade_date = post.get('date', 'N/A')
+            fund = post.get('fund', 'N/A')
+            html += f"""
+                <h1>📊 ARK Invest Trade Alert</h1>
+                <p>Trade Date: <strong>{trade_date}</strong> | Fund: <strong>{fund}</strong></p>
+                <p>Report Generated: {datetime.now().strftime('%B %d, %Y at %H:%M:%S')}</p>
+            </div>"""
+        else:
+            html += f"""
                 <h1>🚨 Trump Truth Social Trading Alert</h1>
                 <p>{datetime.now().strftime('%B %d, %Y at %H:%M:%S')}</p>
-            </div>
+            </div>"""
+        
+        html += f"""
             
             <div class="section">
                 <h2>📊 Analysis Summary</h2>
