@@ -323,7 +323,7 @@ def main():
     check_interval = int(os.getenv('CHECK_INTERVAL_SECONDS', 60))
     
     # Create and run monitor
-    monitor = TruthTradingMonitor(check_interval=check_interval)
+    monitor = MultiSourceTradingMonitor(check_interval=check_interval)
     monitor.run()
 
 
