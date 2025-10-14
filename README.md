@@ -69,11 +69,15 @@ run.bat     # Windows
 
 The system will:
 1. Monitor trumpstruth.org for new posts every 60 seconds
-2. Analyze each post using NLP and Google Gemini AI
-3. Extract companies, sectors, and sentiment
-4. Generate actionable trading ideas with confidence levels
-5. Send email notifications (if configured)
-6. Save all results to `data/trading_ideas.json`
+2. **Skip empty or very short posts** (< 2 characters)
+3. Analyze each post using NLP and Google Gemini AI
+4. Extract companies, sectors, and sentiment
+5. Generate actionable trading ideas with confidence levels
+6. **Send email notifications ONLY for significant posts:**
+   - Market relevance ≥ 0.3
+   - Companies mentioned OR trading ideas generated OR high urgency
+   - Substantial content (≥ 2 characters)
+7. Save all results to `data/trading_ideas.json`
 
 ## Project Structure
 

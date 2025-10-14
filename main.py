@@ -75,7 +75,20 @@ class TruthTradingMonitor:
         print(f"\n{'='*80}")
         print(f"NEW POST DETECTED at {post['timestamp']}")
         print(f"{'='*80}")
-        print(f"Content: {post['content'][:200]}...")
+        
+        # Get post content
+        content = post.get('content', '').strip()
+        
+        # Check if post is empty or too short
+        if not content or len(content) < 2:
+            print(f"[SKIP] Post content is empty or too short (length: {len(content)})")
+            print("[INFO] Not processing empty post")
+            # Still mark as processed to avoid checking again
+            self.processed_posts.add(post_id)
+            self.save_state()
+            return
+        
+        print(f"Content: {content[:200]}...")
         print(f"Link: {post['link']}")
         
         # Analyze post
@@ -124,14 +137,57 @@ class TruthTradingMonitor:
         # Save analysis
         self.save_analysis(analysis)
         
-        # Send email notification
-        if self.email_notifier.enabled:
+        # Determine if this post is significant enough to send email
+        should_send_email = self._should_send_email_notification(analysis, ideas)
+        
+        # Send email notification only if significant
+        if self.email_notifier.enabled and should_send_email:
             print("\n[INFO] Sending email notification...")
             self.email_notifier.send_analysis_report(post, analysis, ideas)
+        elif self.email_notifier.enabled and not should_send_email:
+            print("\n[SKIP] Post not significant enough for email notification")
+            print(f"       Market relevance: {analysis['market_relevance']:.2f}")
+            print(f"       Companies found: {len(analysis['companies'])}")
+            print(f"       Trading ideas: {len(ideas)}")
         
         # Mark as processed
         self.processed_posts.add(post_id)
         print(f"[OK] Post {post_id} processed and marked")
+    
+    def _should_send_email_notification(self, analysis: Dict, trading_ideas: list) -> bool:
+        """
+        Determine if the post is significant enough to send email notification
+        
+        Args:
+            analysis: Analysis results
+            trading_ideas: List of generated trading ideas
+            
+        Returns:
+            True if email should be sent, False otherwise
+        """
+        # Check 1: Market relevance score must be meaningful
+        market_relevance = analysis.get('market_relevance', 0.0)
+        if market_relevance < 0.3:
+            return False
+        
+        # Check 2: Must have at least one of these:
+        # - Companies mentioned
+        # - Trading ideas generated
+        # - High urgency
+        has_companies = len(analysis.get('companies', [])) > 0
+        has_trading_ideas = len(trading_ideas) > 0
+        high_urgency = analysis.get('urgency', 'low') in ['high', 'medium']
+        
+        if not (has_companies or has_trading_ideas or high_urgency):
+            return False
+        
+        # Check 3: Content must be substantial (for email)
+        content_preview = analysis.get('content_preview', '')
+        if len(content_preview.strip()) < 2:
+            return False
+        
+        # All checks passed
+        return True
     
     def save_analysis(self, analysis: Dict):
         """Save analysis to file"""

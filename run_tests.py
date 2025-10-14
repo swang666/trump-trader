@@ -21,6 +21,7 @@ def main():
         ("Email Notifications", "tests.test_email"),
         ("AI Analysis", "tests.test_ai_analysis"),
         ("Duplicate Prevention", "tests.test_duplicate_prevention"),
+        ("Email Filtering", "tests.test_email_filtering"),
         ("Full System", "tests.test_system"),
     ]
     
