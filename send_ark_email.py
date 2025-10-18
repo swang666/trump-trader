@@ -5,6 +5,8 @@ Fetch real ARK trades and send email notification
 
 import sys
 import os
+import logging
+import subprocess
 from datetime import datetime
 
 # Add parent directory to path for imports
@@ -15,11 +17,36 @@ from sources.ark_analyzer import ARKTradeAnalyzer
 from trading_ideas import TradingIdeasGenerator
 from email_notifier import EmailNotifier
 
+# Configure logging for production (minimal console output for GCE)
+file_handler = logging.FileHandler('ark_trades.log')
+file_handler.setLevel(logging.INFO)
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.WARNING)  # Only warnings/errors to console
+console_handler.setFormatter(logging.Formatter('%(levelname)s - %(message)s'))
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
+
+
+def clear_console_safely():
+    """Safely clear console to prevent GCE terminal buffer issues"""
+    try:
+        # Use system clear command (works on Linux/GCE)
+        subprocess.run(['clear'], check=False, capture_output=True)
+    except:
+        # Fallback: print newlines to push content up
+        print('\n' * 50)
+
 
 def main():
-    print("=" * 80)
-    print("FETCHING REAL ARK INVEST TRADES")
-    print("=" * 80)
+    logger.info("Starting ARK Invest trades email process")
+    
+    # Clear console at start to ensure clean output
+    clear_console_safely()
     
     # Initialize components
     scraper = ARKTradesScraper()
@@ -28,52 +55,62 @@ def main():
     email_notifier = EmailNotifier()
     
     if not email_notifier.enabled:
-        print("[ERROR] Email notifications are not configured!")
-        print("Please set up EMAIL_* variables in your .env file")
+        logger.error("Email notifications are not configured!")
+        logger.error("Please set up EMAIL_* variables in your .env file")
         return
     
     # Fetch latest trades
-    print("\n[INFO] Fetching latest ARK trades...")
+    logger.info("Fetching latest ARK trades...")
     trades = scraper.fetch_latest_trades(limit=10)
     
     if not trades:
-        print("[ERROR] No trades fetched!")
+        logger.error("No trades fetched!")
         return
     
-    print(f"[OK] Fetched {len(trades)} trades")
+    logger.info(f"Fetched {len(trades)} trades")
     
-    # Analyze and send email for significant trades
-    emails_sent = 0
+    # Clear console after fetching to prevent buffer buildup
+    clear_console_safely()
     
-    for i, trade in enumerate(trades[:5], 1):  # Process top 5 trades
-        print(f"\n[{i}] Analyzing: {trade['title']}")
+    # Analyze trades for summary
+    logger.info(f"Analyzing {len(trades)} trades for summary...")
+    
+    significant_trades = []
+    for i, trade in enumerate(trades, 1):
+        logger.debug(f"Analyzing trade {i}: {trade['title']}")
         
         # Analyze the trade
         analysis = analyzer.analyze_trade(trade)
         
-        print(f"    Sentiment: {analysis['sentiment'].upper()}")
-        print(f"    Confidence: {analysis['confidence'].upper()}")
-        print(f"    Market Relevance: {analysis['market_relevance']:.2f}")
+        logger.debug(f"Trade {i} - Sentiment: {analysis['sentiment'].upper()}, "
+                    f"Confidence: {analysis['confidence'].upper()}, "
+                    f"Relevance: {analysis['market_relevance']:.2f}")
         
-        # Generate trading ideas
+        # Generate trading ideas for significant trades
         ideas = []
         if analysis['market_relevance'] >= 0.2:
             ideas = generator.generate_ideas(analysis)
             if ideas:
-                print(f"    Trading Ideas: {len(ideas)}")
+                logger.debug(f"Trade {i} - Generated {len(ideas)} trading ideas")
         
-        # Send email for significant trades
-        if analysis['market_relevance'] >= 0.5 or analysis['confidence'] == 'high':
-            print(f"    [INFO] Sending email notification...")
-            success = email_notifier.send_analysis_report(trade, analysis, ideas)
-            if success:
-                emails_sent += 1
-                print(f"    [OK] Email sent!")
+        # Track significant trades for summary
+        if analysis['market_relevance'] >= 0.3 or analysis['confidence'] == 'high':
+            significant_trades.append({
+                'trade': trade,
+                'analysis': analysis,
+                'ideas': ideas
+            })
+            logger.debug(f"Trade {i} - Added to summary (significant)")
         else:
-            print(f"    [SKIP] Not significant enough for email")
+            logger.debug(f"Trade {i} - Not significant enough for summary")
+        
+        # Clear console every 5 trades to prevent buffer buildup
+        if i % 5 == 0:
+            clear_console_safely()
     
-    # Create summary email with all trades
-    print(f"\n[INFO] Creating summary email with all {len(trades)} trades...")
+    # Create consolidated summary email
+    logger.info(f"Creating consolidated summary email...")
+    logger.info(f"Total trades: {len(trades)}, Significant trades: {len(significant_trades)}")
     
     # Build summary
     summary_html = f"""
@@ -88,6 +125,11 @@ def main():
             .ticker {{ font-weight: bold; color: #667eea; }}
             .fund {{ color: #6c757d; font-size: 0.9em; }}
             .date {{ color: #6c757d; font-size: 0.85em; }}
+            .analysis {{ margin-top: 10px; padding: 10px; background: #e9ecef; border-radius: 5px; }}
+            .sentiment {{ font-weight: bold; }}
+            .positive {{ color: #28a745; }}
+            .negative {{ color: #dc3545; }}
+            .neutral {{ color: #6c757d; }}
         </style>
     </head>
     <body>
@@ -98,7 +140,7 @@ def main():
         </div>
         
         <div style="padding: 20px;">
-            <h2>Latest {len(trades)} Trades</h2>
+            <h2>All {len(trades)} Recent Trades</h2>
     """
     
     # Group by fund
@@ -109,12 +151,19 @@ def main():
             fund_trades[fund] = []
         fund_trades[fund].append(trade)
     
-    # Add trades by fund
+    # Add trades by fund with analysis for significant ones
     for fund, fund_trade_list in fund_trades.items():
         summary_html += f"<h3>{fund}</h3>"
         for trade in fund_trade_list:
             direction_class = 'buy' if trade['direction'] == 'buy' else 'sell'
             direction_emoji = '🟢' if trade['direction'] == 'buy' else '🔴'
+            
+            # Check if this trade has analysis
+            trade_analysis = None
+            for sig_trade in significant_trades:
+                if sig_trade['trade']['ticker'] == trade['ticker'] and sig_trade['trade']['date'] == trade['date']:
+                    trade_analysis = sig_trade
+                    break
             
             summary_html += f"""
             <div class="trade {direction_class}">
@@ -124,8 +173,30 @@ def main():
                     <span class="ticker">{trade['ticker']}</span> - {trade['company']}
                 </div>
                 <div>Shares: {trade['shares']:,} ({trade['etf_percent']:.2f}% of fund)</div>
-            </div>
             """
+            
+            # Add analysis if available
+            if trade_analysis:
+                analysis = trade_analysis['analysis']
+                sentiment_class = 'positive' if analysis['sentiment'] == 'positive' else 'negative' if analysis['sentiment'] == 'negative' else 'neutral'
+                
+                summary_html += f"""
+                <div class="analysis">
+                    <div><span class="sentiment {sentiment_class}">Sentiment: {analysis['sentiment'].upper()}</span> | 
+                         Confidence: {analysis['confidence'].upper()} | 
+                         Relevance: {analysis['market_relevance']:.2f}</div>
+                """
+                
+                # Add trading ideas if available
+                if trade_analysis['ideas']:
+                    summary_html += "<div><strong>Trading Ideas:</strong><ul>"
+                    for idea in trade_analysis['ideas'][:3]:  # Show top 3 ideas
+                        summary_html += f"<li>{idea.get('idea', 'N/A')} (Confidence: {idea.get('confidence', 'N/A')})</li>"
+                    summary_html += "</ul></div>"
+                
+                summary_html += "</div>"
+            
+            summary_html += "</div>"
     
     summary_html += """
         </div>
@@ -179,13 +250,16 @@ Shares: {trade['shares']:,} ({trade['etf_percent']:.2f}% of fund)
             server.login(email_notifier.sender_email, email_notifier.sender_password)
             server.send_message(msg)
         
-        print(f"[OK] Summary email sent to {email_notifier.recipient_email}")
-        print(f"\n{'=' * 80}")
-        print(f"[SUCCESS] Sent {emails_sent + 1} email(s) total")
-        print(f"{'=' * 80}")
+        logger.info(f"Consolidated summary email sent to {email_notifier.recipient_email}")
+        logger.info(f"SUCCESS: Sent 1 consolidated email with {len(trades)} trades "
+                   f"({len(significant_trades)} significant trades with analysis)")
+        
+        # Final console clear for clean completion
+        clear_console_safely()
         
     except Exception as e:
-        print(f"[ERROR] Failed to send summary email: {e}")
+        logger.error(f"Failed to send summary email: {e}")
+        clear_console_safely()
 
 
 if __name__ == "__main__":

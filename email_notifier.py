@@ -5,11 +5,14 @@ Sends structured reports when new posts are analyzed
 
 import os
 import smtplib
+import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 from typing import Dict, List
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -28,10 +31,10 @@ class EmailNotifier:
         # Check if email is configured
         if self.sender_email and self.sender_password and self.recipient_email:
             self.enabled = True
-            print("[OK] Email notifications enabled")
+            logger.info("Email notifications enabled")
         else:
-            print("[WARNING] Email not configured - notifications disabled")
-            print("         Add SENDER_EMAIL, SENDER_PASSWORD, RECIPIENT_EMAIL to .env")
+            logger.warning("Email not configured - notifications disabled")
+            logger.warning("Add SENDER_EMAIL, SENDER_PASSWORD, RECIPIENT_EMAIL to .env")
     
     def send_analysis_report(self, post: Dict, analysis: Dict, trading_ideas: List[Dict]) -> bool:
         """
@@ -73,11 +76,11 @@ class EmailNotifier:
                 server.login(self.sender_email, self.sender_password)
                 server.send_message(msg)
             
-            print(f"[OK] Email notification sent to {self.recipient_email}")
+            logger.info(f"Email notification sent to {self.recipient_email}")
             return True
             
         except Exception as e:
-            print(f"[ERROR] Failed to send email: {e}")
+            logger.error(f"Failed to send email: {e}")
             return False
     
     def _create_subject(self, analysis: Dict) -> str:

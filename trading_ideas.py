@@ -3,9 +3,12 @@ Trading Ideas Generator
 Generates actionable trading ideas based on post analysis
 """
 
+import logging
 from typing import Dict, List
 from datetime import datetime
 import json
+
+logger = logging.getLogger(__name__)
 
 
 class TradingIdeasGenerator:
@@ -312,7 +315,7 @@ class TradingIdeasGenerator:
             
             return True
         except Exception as e:
-            print(f"Error saving ideas: {e}")
+            logger.error(f"Error saving ideas: {e}")
             return False
 
 

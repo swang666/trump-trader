@@ -4,6 +4,7 @@ Analyzes Truth Social posts for market-relevant information
 """
 
 import re
+import logging
 from typing import Dict, List, Optional
 from textblob import TextBlob
 import spacy
@@ -11,13 +12,15 @@ from datetime import datetime
 import os
 from dotenv import load_dotenv
 
+logger = logging.getLogger(__name__)
+
 load_dotenv()
 
 # Try to load spaCy model
 try:
     nlp = spacy.load("en_core_web_sm")
 except:
-    print("Warning: spaCy model not found. Run: python -m spacy download en_core_web_sm")
+    logger.warning("spaCy model not found. Run: python -m spacy download en_core_web_sm")
     nlp = None
 
 
@@ -33,16 +36,16 @@ class PostAnalyzer:
             try:
                 import google.generativeai as genai
                 genai.configure(api_key=self.gemini_api_key)
-                self.gemini_model = genai.GenerativeModel('gemini-2.5-flash')
+                self.gemini_model = genai.GenerativeModel('gemini-2.5-pro')
                 self.use_ai = True
-                print("[OK] Google Gemini AI enabled for analysis")
+                logger.info("Google Gemini AI enabled for analysis")
             except Exception as e:
-                print(f"[WARNING] Gemini initialization failed: {e}")
-                print("[WARNING] Will use basic sentiment analysis only")
+                logger.warning(f"Gemini initialization failed: {e}")
+                logger.warning("Will use basic sentiment analysis only")
                 self.gemini_model = None
                 self.use_ai = False
         else:
-            print("[WARNING] No GEMINI_API_KEY found - using basic analysis only")
+            logger.warning("No GEMINI_API_KEY found - using basic analysis only")
             self.gemini_model = None
             self.use_ai = False
         
@@ -145,8 +148,8 @@ Rules:
             return analysis
             
         except Exception as e:
-            print(f"[WARNING] AI analysis failed: {e}")
-            print("   Falling back to basic analysis...")
+            logger.warning(f"AI analysis failed: {e}")
+            logger.warning("Falling back to basic analysis...")
             return self._basic_analysis(content, post)
     
     def _basic_analysis(self, content: str, post: Dict) -> Dict:

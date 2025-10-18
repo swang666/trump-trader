@@ -6,9 +6,12 @@ Cathie Wood's trades are highly influential in tech/innovation stocks.
 """
 
 import requests
+import logging
 from datetime import datetime
 from typing import List, Dict, Optional
 import time
+
+logger = logging.getLogger(__name__)
 
 
 class ARKTradesScraper:
@@ -35,7 +38,7 @@ class ARKTradesScraper:
         
         for symbol in self.etf_symbols:
             try:
-                print(f"[INFO] Fetching {symbol} trades from API...")
+                logger.debug(f"Fetching {symbol} trades from API...")
                 
                 params = {
                     'symbol': symbol,
@@ -53,19 +56,19 @@ class ARKTradesScraper:
                     if normalized_trade:
                         all_trades.append(normalized_trade)
                 
-                print(f"[OK] Fetched {len(trades_data.get('trades', []))} trades from {symbol}")
+                logger.debug(f"Fetched {len(trades_data.get('trades', []))} trades from {symbol}")
                 
                 # Small delay between requests to be polite
                 time.sleep(0.5)
                 
             except requests.exceptions.RequestException as e:
-                print(f"[WARNING] Failed to fetch {symbol} trades: {e}")
+                logger.warning(f"Failed to fetch {symbol} trades: {e}")
                 continue
             except Exception as e:
-                print(f"[WARNING] Unexpected error fetching {symbol} trades: {e}")
+                logger.warning(f"Unexpected error fetching {symbol} trades: {e}")
                 continue
         
-        print(f"[OK] Total: Fetched {len(all_trades)} ARK trades across all funds")
+        logger.info(f"Total: Fetched {len(all_trades)} ARK trades across all funds")
         return all_trades
     
     def _normalize_trade(self, trade: Dict) -> Optional[Dict]:
@@ -130,7 +133,7 @@ class ARKTradesScraper:
             return normalized
             
         except Exception as e:
-            print(f"[WARNING] Failed to normalize trade: {e}")
+            logger.warning(f"Failed to normalize trade: {e}")
             return None
     
     def _generate_content(self, trade: Dict, direction: str, shares: int, etf_percent: float) -> str:
@@ -192,38 +195,5 @@ class ARKTradesScraper:
         return summary
 
 
-if __name__ == "__main__":
-    # Test the scraper
-    print("=" * 80)
-    print("ARK Invest Trades Scraper Test")
-    print("=" * 80)
-    
-    scraper = ARKTradesScraper()
-    trades = scraper.fetch_latest_trades(limit=10)
-    
-    if trades:
-        print(f"\n[OK] Successfully fetched {len(trades)} trades\n")
-        
-        for i, trade in enumerate(trades, 1):
-            print(f"{i}. {trade['title']}")
-            print(f"   Date: {trade['date']}")
-            print(f"   Fund: {trade['fund']}")
-            print(f"   Shares: {trade['shares']:,}")
-            print(f"   Direction: {trade['direction'].upper()}")
-            print(f"   Content: {trade['content']}")
-            print()
-        
-        # Show summary
-        summary = scraper.get_fund_summary(trades)
-        print("\n" + "=" * 80)
-        print("FUND SUMMARY")
-        print("=" * 80)
-        for fund, stats in summary.items():
-            print(f"\n{fund}:")
-            if stats['buys']:
-                print(f"  Buys: {', '.join(stats['buys'])} ({stats['total_buys']:,} shares)")
-            if stats['sells']:
-                print(f"  Sells: {', '.join(stats['sells'])} ({stats['total_sells']:,} shares)")
-    else:
-        print("[ERROR] No trades fetched")
+# Test section removed for production use
 

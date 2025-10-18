@@ -7,9 +7,12 @@ import requests
 from bs4 import BeautifulSoup
 import feedparser
 import time
+import logging
 from datetime import datetime
 import json
 from typing import List, Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class TruthSocialScraper:
@@ -45,7 +48,7 @@ class TruthSocialScraper:
             return self._fetch_from_web(limit)
             
         except Exception as e:
-            print(f"Error fetching posts: {e}")
+            logger.error(f"Error fetching posts: {e}")
             return []
     
     def _fetch_from_rss(self, limit: int) -> List[Dict]:
@@ -70,7 +73,7 @@ class TruthSocialScraper:
             return posts
             
         except Exception as e:
-            print(f"RSS fetch failed: {e}")
+            logger.warning(f"RSS fetch failed: {e}")
             return []
     
     def _fetch_from_web(self, limit: int) -> List[Dict]:
@@ -117,7 +120,7 @@ class TruthSocialScraper:
             return posts
             
         except Exception as e:
-            print(f"Web scraping failed: {e}")
+            logger.warning(f"Web scraping failed: {e}")
             return []
     
     def get_new_posts(self) -> List[Dict]:
